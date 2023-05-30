@@ -26,7 +26,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+         client.connect();
 
         const usersCollection = client.db("bistroDb").collection("users");
         const menuCollection = client.db("bistroDb").collection("menu");
@@ -36,7 +36,12 @@ async function run() {
         // Users API
         app.post('/users', async(req, res) => {
             const user = req.body;
-            console.log(user);
+            const query = {email: user.email}
+            const existingUser = await usersCollection.findOne(query);
+
+            if(existingUser){
+                return res.send("User already exists")
+            }
             const result = await usersCollection.insertOne(user);
             res.send(result);
         })
