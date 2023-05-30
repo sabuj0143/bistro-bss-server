@@ -3,6 +3,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 require('dotenv').config()
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 
 const port = process.env.PORT || 5000;
 
@@ -26,23 +27,42 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-         client.connect();
+        client.connect();
 
         const usersCollection = client.db("bistroDb").collection("users");
         const menuCollection = client.db("bistroDb").collection("menu");
         const reviewCollection = client.db("bistroDb").collection("reviews");
         const cartCollection = client.db("bistroDb").collection("carts");
 
-        // Users API
-        app.post('/users', async(req, res) => {
+        // Users API Get
+        app.get('/users', async (req, res) => {
+            const result = await usersCollection.find().toArray();
+            res.send(result);
+        })
+
+        // Users API Post
+        app.post('/users', async (req, res) => {
             const user = req.body;
-            const query = {email: user.email}
+            const query = { email: user.email }
             const existingUser = await usersCollection.findOne(query);
 
-            if(existingUser){
+            if (existingUser) {
                 return res.send("User already exists")
             }
             const result = await usersCollection.insertOne(user);
+            res.send(result);
+        })
+
+        // Admin vs users
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    role: 'admin'
+                },
+            };
+            const result = await usersCollection.updateOne(filter, updateDoc);
             res.send(result);
         })
 
