@@ -11,6 +11,25 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// jwt middleware
+const verifyJwt = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if(!authorization){
+         return res.status(401).send({error: true, Message: "unauthorized access"});
+    }
+    // bearer token
+    const token = authorization.split(' ')[1];
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if(err){
+            return res.status(401).send({error: true, Message: "unauthorized access"});
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
+
+
 // ------------------------------------------------
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.s1vjhzt.mongodb.net/?retryWrites=true&w=majority`;
@@ -27,7 +46,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        client.connect();
+        await client.connect();
 
         const usersCollection = client.db("bistroDb").collection("users");
         const menuCollection = client.db("bistroDb").collection("menu");
@@ -35,11 +54,14 @@ async function run() {
         const cartCollection = client.db("bistroDb").collection("carts");
 
         // JWT 
-        app.post('/jwt'), (req, res) => {
+        app.post('/jwt', (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            console.log(user);
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "1h"} )
+            console.log(token);
+
             res.send({ token });
-        }
+        })
 
         // Users API Get
         app.get('/users', async (req, res) => {
@@ -85,10 +107,14 @@ async function run() {
         })
 
         // Cart collection get
-        app.get('/carts', async (req, res) => {
+        app.get('/carts', verifyJwt, async (req, res) => {
             const email = req.query.email;
             if (!email) {
                 return res.send([]);
+            }
+            const decodedEmail = req.decoded.email;
+            if(email !== decodedEmail) {
+                return res.status(403).send({error: true, Message: "porviden access"});
             }
             const query = { email: email }
             const result = await cartCollection.find(query).toArray();
