@@ -4,6 +4,7 @@ const app = express();
 require('dotenv').config()
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY)
 
 const port = process.env.PORT || 5000;
 
@@ -14,15 +15,15 @@ app.use(express.json());
 // jwt middleware
 const verifyJwt = (req, res, next) => {
     const authorization = req.headers.authorization;
-    if(!authorization){
-         return res.status(401).send({error: true, Message: "unauthorized access"});
+    if (!authorization) {
+        return res.status(401).send({ error: true, Message: "unauthorized access" });
     }
     // bearer token
     const token = authorization.split(' ')[1];
 
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        if(err){
-            return res.status(401).send({error: true, Message: "unauthorized access"});
+        if (err) {
+            return res.status(401).send({ error: true, Message: "unauthorized access" });
         }
         req.decoded = decoded;
         next();
@@ -57,17 +58,17 @@ async function run() {
         app.post('/jwt', (req, res) => {
             const user = req.body;
             // console.log(user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'} )
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
 
             res.send({ token });
         })
         //Warning: use verifyJwt before using verifyAdmin 
-        const verifyAdmin = async(req, res, next) => {
+        const verifyAdmin = async (req, res, next) => {
             const email = req.decoded.email;
-            const query = {email: email}
+            const query = { email: email }
             const user = await usersCollection.findOne(query)
-            if(user?.role !== 'admin'){
-                return res.status(403).send({error: true, message: 'forbidden message'})
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ error: true, message: 'forbidden message' })
             }
             next();
         }
@@ -92,14 +93,14 @@ async function run() {
             res.send(result);
         })
         // admin vs user checks
-        app.get('/users/admin/:email', verifyJwt, async(req, res) => {
+        app.get('/users/admin/:email', verifyJwt, async (req, res) => {
             const email = req.params.email;
-            if(req.decoded.email !== email) {
-                res.send({admin: false})
+            if (req.decoded.email !== email) {
+                res.send({ admin: false })
             }
-            const query = {email: email}
+            const query = { email: email }
             const user = await usersCollection.findOne(query);
-            const result = {admin: user?.role === 'admin'};
+            const result = { admin: user?.role === 'admin' };
             res.send(result);
         })
 
@@ -130,7 +131,7 @@ async function run() {
         // DELETE menu collection
         app.delete('/menu/:id', verifyJwt, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await menuCollection.deleteOne(query);
             res.send(result);
         })
@@ -148,8 +149,8 @@ async function run() {
                 return res.send([]);
             }
             const decodedEmail = req.decoded.email;
-            if(email !== decodedEmail) {
-                return res.status(403).send({error: true, Message: "porviden access"});
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, Message: "porviden access" });
             }
             const query = { email: email }
             const result = await cartCollection.find(query).toArray();
@@ -169,6 +170,20 @@ async function run() {
             const query = { _id: new ObjectId(id) }
             const result = await cartCollection.deleteOne(query)
             res.send(result);
+        })
+
+        // create-payment-intent api
+        app.post('/create-payment-intent', verifyJwt, async (req, res) => {
+            const { price } = req.body;
+            const amount = price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            })
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            })
         })
 
 
